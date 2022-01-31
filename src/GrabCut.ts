@@ -5,6 +5,7 @@ import * as Mat from "./Matrix";
 import * as Util from "./Utility";
 import * as Conv from "./ConvergenceChecker";
 import * as V3 from "./V3";
+import { progress } from "./Progress";
 
 export enum Trimap {
     Background = 0,
@@ -13,9 +14,9 @@ export enum Trimap {
 }
 
 export interface Options {
-    tolerance: number, //in %
+    tolerance: number, //in %, min changes to next iteration
     maxIterations: number,
-    cohesionFactor: number,
+    cohesionFactor: number, // gamma
     nFGClusters: number,
     nBGClusters: number
 }
@@ -69,6 +70,12 @@ export class GrabCut {
         this.bgGMM.Fit(bgPixels, opt.nBGClusters, GMM.Initializer.KMeansPlusPlus, GMM_N_ITER, MIN_PERCENT_CHANGE);
         console.timeEnd("Grabcut-GM");
 
+        progress.STEP.KMeans.advanceMax();
+        progress.STEP.Points2GMM.advanceMax();
+        progress.STEP.EMLikelihoodEval.advanceMax();
+        progress.STEP.EMRespSum.advanceMax();
+        progress.STEP.EMCovCal.advanceMax();
+
         this.RunIterations(opt.maxIterations, opt.tolerance, opt.cohesionFactor);
     }
 
@@ -112,15 +119,19 @@ export class GrabCut {
             let [validBgInd, validBgGroupSizes] = filterEmptyGroups(bgInd, bgGroupSizes);
             [this.fgGMM, this.bgGMM] = GMM.GMM.labelledDataToGMMs(validFgInd, validFgGroupSizes, validBgInd, validBgGroupSizes, labels, this.flattenedImg);
             console.timeEnd("Graphcut-Graph GMM-recomputation");
+            progress.STEP.GrabcutGMMRecomputation.advance();
 
             console.log(`fg clusters:${this.fgGMM.clusters.length}, bg clusters:${this.bgGMM.clusters.length}`);
 
             console.time("Grabcut-Graph source sink update");
             GrabCut.UpdateSourceAndSink(network, maxCapacity, this.fgGMM, this.bgGMM, this.flattenedImg, this.width, this.height, this.trimap, srcNode, sinkNode);
             console.timeEnd("Grabcut-Graph source sink update");
+            progress.STEP.GrabcutGraphSourceSinkUpdate.advance();
+
             console.time("Grabcut-Graph flow reset");
             network.ResetFlow();
             console.timeEnd("Grabcut-Graph flow reset");
+            progress.STEP.GrabcutGraphFlowReset.advance();
 
             console.timeEnd("Grabcut-Graph init");
 
@@ -136,11 +147,18 @@ export class GrabCut {
 
             energy = flowResult.GetMaxFlow();
             console.timeEnd("Grabcut-Graph cut");
+            progress.STEP.GrabcutGraphCut.advance();
+
             console.log(`Energy: ${energy}`);
         } while (!conv.hasConverged(energy))
         console.timeEnd("Grabcut-Graph Cut");
         //Done    
         //Alpha mask is now stored in the matte array.
+        progress.STEP.GrabcutGMMRecomputation.advanceMax();
+        progress.STEP.GrabcutGraphSourceSinkUpdate.advanceMax();
+        progress.STEP.GrabcutGraphFlowReset.advanceMax();
+        progress.STEP.GrabcutGraphMaxFlow.advanceMax();
+        progress.STEP.GrabcutGraphCut.advanceMax();
     }
 
     //Mask values will be between 0-1
@@ -267,6 +285,8 @@ export class GrabCut {
             V3.DiffNormSquare :
             function (v1: Mat.Matrix, v2: Mat.Matrix) { return Mat.NormSquare(Mat.Sub(v1, v2)) };
 
+        let progressScale = 1 / height / 2;
+
         for (let r = 0; r < height; r++) {
             for (let c = 0; c < width; c++) {
                 let linearInd = GetArrayIndex(r, c, width);
@@ -282,6 +302,8 @@ export class GrabCut {
                     nCount++;
                 }
             }
+
+            progress.STEP.GrabcutPixelGraph.advance(progressScale);
         }
 
         let beta = 0.5 / (diffAcc / nCount);
@@ -316,6 +338,7 @@ export class GrabCut {
                     maxCap = (capacity > maxCap) ? capacity : maxCap;
                 }
             }
+            progress.STEP.GrabcutPixelGraph.advance(progressScale);
         }
 
         console.log(`Pixel to pixel maximum capacity:${maxCap}`);

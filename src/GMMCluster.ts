@@ -61,7 +61,7 @@ export interface ICluster{
 }
 
 export class Cluster{
-    private params;
+    private params: {[key: string]: any};
     constructor(_pi: number, _mean: M.Matrix, _covariance: M.Matrix){
         this.params = new Params(_pi, _mean, _covariance);
     }
@@ -90,7 +90,7 @@ export function ClusterFactory(_pi: number, _mean: M.Matrix, _covariance: M.Matr
 
 //Optimized for clusters of 3 dimensional data
 export class V3Cluster{
-    private params;
+    private params: {[key: string]: any};
     constructor(_pi: number, _mean: M.Matrix, _covariance: M.Matrix){
         this.params = new Params(_pi, _mean, _covariance);
     }

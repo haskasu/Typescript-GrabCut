@@ -3,6 +3,7 @@ import * as Mat from "./Matrix";
 import * as KM from "./KMeans";
 import * as Conv from "./ConvergenceChecker";
 import * as C from "./GMMCluster";
+import { progress } from "./Progress";
 
 export enum Initializer {
     random,
@@ -59,8 +60,13 @@ export class GMM {
                 let kMeansResult = KM.Fit(data, nClusters, 20, 1, KM.Initializer.KMeansPlusPlus);
                 let nonEmptyClusters = kMeansResult.clusters.filter(c => c.length > 0);
                 console.timeEnd("KMeans");
+                progress.STEP.KMeans.advance();
                 console.time("Points2GMM");
-                newClusters = nonEmptyClusters.map(c => GMM.Points2GMMCluster(c, data.length));
+                newClusters = nonEmptyClusters.map(c => {
+                    let cluster = GMM.Points2GMMCluster(c, data.length);
+                    progress.STEP.Points2GMM.advance(1 / nonEmptyClusters.length);
+                    return cluster;
+                });
                 console.timeEnd("Points2GMM");
                 break;
             }
@@ -75,6 +81,7 @@ export class GMM {
             newClusters = EM(data, newClusters);
             logProb = GMM.LogLikelihood(data, newClusters);
             console.log(`Iteration:${conv.getCurrentIter()}, logProb:${logProb}`);
+            progress.reset
         } while (!conv.hasConverged(logProb));
 
         this.clusters = newClusters;
@@ -196,6 +203,7 @@ function EM(data: Mat.Matrix[], initialClusters: C.ICluster[]): C.ICluster[] {
     }
 
     console.timeEnd("EM-Likelihood-eval");
+    progress.STEP.EMLikelihoodEval.advance();
 
     //Scan total probabilities for zero
     //Replace zeroes with a small value to prevent div by zero errors
@@ -224,7 +232,7 @@ function EM(data: Mat.Matrix[], initialClusters: C.ICluster[]): C.ICluster[] {
 
     console.time("EM-Resp-Sum");
 
-    let fnSumResp:sumRespDelegate = (nDims == 3) ? SumResponsibilityV3 : SumResponsibilityGeneric;
+    let fnSumResp: sumRespDelegate = (nDims == 3) ? SumResponsibilityV3 : SumResponsibilityGeneric;
 
     fnSumResp(data, clusterSum, resp, nClusters);
 
@@ -235,6 +243,8 @@ function EM(data: Mat.Matrix[], initialClusters: C.ICluster[]): C.ICluster[] {
     }
 
     console.timeEnd("EM-Resp-Sum");
+    progress.STEP.EMRespSum.advance();
+
 
     let means =
         clusterSum
@@ -248,10 +258,11 @@ function EM(data: Mat.Matrix[], initialClusters: C.ICluster[]): C.ICluster[] {
 
     console.time("EM-cov-cal");
 
-    let fnCovSum:covSumDelegate = (nDims == 3) ? sumCovarianceV3 : sumCovarianceGeneric;
+    let fnCovSum: covSumDelegate = (nDims == 3) ? sumCovarianceV3 : sumCovarianceGeneric;
     fnCovSum(data, nClusters, means, resp, covAcc);
 
     console.timeEnd("EM-cov-cal");
+    progress.STEP.EMCovCal.advance();
 
     let covariances =
         covAcc.map((cov, ind) => Mat.Scale(1 / clusterResp[ind], cov));
@@ -264,7 +275,7 @@ function EM(data: Mat.Matrix[], initialClusters: C.ICluster[]): C.ICluster[] {
 
 //#region summation of responsibilities
 type sumRespDelegate = (_data: Mat.Matrix[], _clusterSum: Mat.Matrix[], _resp: number[][], _nClusters: number) => void;
- 
+
 function SumResponsibilityGeneric(_data: Mat.Matrix[], _clusterSum: Mat.Matrix[], _resp: number[][], _nClusters: number) {
     for (let c = 0; c < _nClusters; c++) {
         for (let d = 0; d < _data.length; d++) {
@@ -292,9 +303,9 @@ function SumResponsibilityV3(_data: Mat.Matrix[], _clusterSum: Mat.Matrix[], _re
 
 //#region summation of covariances
 
-type covSumDelegate = (data: Mat.Matrix[], nClusters: number, means: Mat.Matrix[], resp:number[][], covAcc: Mat.Matrix[]) => void;
+type covSumDelegate = (data: Mat.Matrix[], nClusters: number, means: Mat.Matrix[], resp: number[][], covAcc: Mat.Matrix[]) => void;
 
-function sumCovarianceGeneric(_data: Mat.Matrix[], _nClusters: number, _means: Mat.Matrix[], _resp:number[][], _covAcc: Mat.Matrix[]) {
+function sumCovarianceGeneric(_data: Mat.Matrix[], _nClusters: number, _means: Mat.Matrix[], _resp: number[][], _covAcc: Mat.Matrix[]) {
     for (let c = 0; c < _nClusters; c++) {
         for (let d = 0; d < _data.length; d++) {
             let diff = Mat.Sub(_data[d], _means[c]);
@@ -305,7 +316,7 @@ function sumCovarianceGeneric(_data: Mat.Matrix[], _nClusters: number, _means: M
     }
 }
 
-function sumCovarianceV3(_data: Mat.Matrix[], _nClusters: number, _means: Mat.Matrix[], _resp:number[][], _covAcc: Mat.Matrix[]) {
+function sumCovarianceV3(_data: Mat.Matrix[], _nClusters: number, _means: Mat.Matrix[], _resp: number[][], _covAcc: Mat.Matrix[]) {
     for (let c = 0; c < _nClusters; c++) {
         for (let d = 0; d < _data.length; d++) {
             let v3 = _data[d];

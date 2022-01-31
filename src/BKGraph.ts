@@ -2,6 +2,7 @@ import * as Dict from "./Collections/Dictionary";
 import * as Q from "./Collections/Queue";
 import * as Util from "./Utility";
 import * as FlowBase from "./FlowNetworkSolver";
+import { progress } from "./Progress";
 
 export enum TreeFlag {
     Free = 0,
@@ -50,10 +51,10 @@ export class BKNetwork implements FlowBase.IFlowNetwork {
         return ind;
     }
 
-    CreateEdge(source: number, dest: number, capacity: number): number{
-        if(isNaN(capacity)) throw new Error("capacity cannot be NaN");
-        if(!isFinite(capacity)) throw new Error("Infinite capacity");
-        
+    CreateEdge(source: number, dest: number, capacity: number): number {
+        if (isNaN(capacity)) throw new Error("capacity cannot be NaN");
+        if (!isFinite(capacity)) throw new Error("Infinite capacity");
+
         let edgeInd = this.edges.length;
         let edge = new BKEdge(source, dest, capacity, edgeInd);
         this.edges.push(edge);
@@ -61,20 +62,20 @@ export class BKNetwork implements FlowBase.IFlowNetwork {
         this.nodes[dest].edgesIn.push(edge);
 
         //Update edgelist
-        this.edgeList[source].Set(dest, edge);  
-        return edgeInd; 
+        this.edgeList[source].Set(dest, edge);
+        return edgeInd;
     }
 
     //Does update existing flow values. 
     //Call Resetflow after updating edges to prevent over-saturated edges
-    UpdateEdge(srcIndex:number, destInd:number, newCap:number):void{
-        let targetEdge:BKEdge = this.edgeList[srcIndex].Get(destInd);
+    UpdateEdge(srcIndex: number, destInd: number, newCap: number): void {
+        let targetEdge: BKEdge = this.edgeList[srcIndex].Get(destInd);
         targetEdge.cap = newCap;
     }
 
-    ResetFlow():void{
+    ResetFlow(): void {
         let edges = this.edges;
-        for(let i = 0; i < edges.length; i++){
+        for (let i = 0; i < edges.length; i++) {
             edges[i].flow = 0;
         }
     }
@@ -83,11 +84,11 @@ export class BKNetwork implements FlowBase.IFlowNetwork {
         let clone = new BKNetwork();
 
         //Init nodes
-        for(let i = 0; i < this.nodes.length; i++) clone.CreateNode();
+        for (let i = 0; i < this.nodes.length; i++) clone.CreateNode();
 
         //Clone edges
         let oE = this.edges;
-        for(let i = 0; i < oE.length; i++){
+        for (let i = 0; i < oE.length; i++) {
             let oEdge = oE[i];
             let cEdgeInd = clone.CreateEdge(oEdge.from, oEdge.to, oEdge.cap);
             //Copy flow values over
@@ -104,7 +105,7 @@ const NULL_PARENT = -1;
 //Returns null if no path is found
 //Returned Edge: from(source) -> to(sink)
 //The edge represents the connection between the source and sink trees
-function BKGrow(nodes: BKNode[], active: Q.IQueue<number>, flags: Uint8Array, parents: number[], edgeToParent: BKEdge[], activeEdge:number[]): BKEdge | null {
+function BKGrow(nodes: BKNode[], active: Q.IQueue<number>, flags: Uint8Array, parents: number[], edgeToParent: BKEdge[], activeEdge: number[]): BKEdge | null {
 
     while (active.Count() > 0) {
         let nInd = active.Peek();
@@ -156,7 +157,7 @@ function BKGrow(nodes: BKNode[], active: Q.IQueue<number>, flags: Uint8Array, pa
         //Processed all neighbours, remove from active set
         active.Dequeue();
         //Reset active edge
-        activeEdge[nInd] = 0; 
+        activeEdge[nInd] = 0;
     }
     return null;
 }
@@ -171,7 +172,7 @@ function BKBottleneck(src: number, sink: number, connector: BKEdge, edgeToParent
         while (walkS != src) {
             //if (parents[walkS] == NULL_PARENT) throw Error("Null parent in augmenting path");
             let edge = edgeToParent[walkS];
-            bottleneck  = Math.min(bottleneck, edge.cap - edge.flow);
+            bottleneck = Math.min(bottleneck, edge.cap - edge.flow);
             /*
             let newMin = Math.min(bottleneck, edge.cap - edge.flow);
             
@@ -343,9 +344,9 @@ function BKAdopt(nodes: BKNode[], orphanSet: number[], flags: Uint8Array, parent
                 //to add to the active set
 
                 let edgesOut = orphanNode.edgesOut;
-                for(let i = 0; i < edgesOut.length; i++){
+                for (let i = 0; i < edgesOut.length; i++) {
                     let e = edgesOut[i];
-                    if(e.flow < e.cap && flags[e.to] == group){
+                    if (e.flow < e.cap && flags[e.to] == group) {
                         if (!activeSet.Contains(e.to)) {
                             activeSet.Enqueue(e.to);
                         }
@@ -355,9 +356,9 @@ function BKAdopt(nodes: BKNode[], orphanSet: number[], flags: Uint8Array, parent
                 //Find children & add them to the orphan set
 
                 let edgesIn = orphanNode.edgesIn;
-                for(let i = 0; i < edgesIn.length; i++){
+                for (let i = 0; i < edgesIn.length; i++) {
                     let e = edgesIn[i];
-                    if(flags[e.from] == group && parents[e.from] == ind){
+                    if (flags[e.from] == group && parents[e.from] == ind) {
                         orphanSet.push(e.from);
                         parents[e.from] = NULL_PARENT;
                     }
@@ -400,7 +401,11 @@ BKMaxflow = function (src: number, sink: number, network: BKNetwork): FlowBase.I
     flags[src] = TreeFlag.S;
     flags[sink] = TreeFlag.T;
 
+    let progressScale = 1 / 20;
+    let count = 0;
+
     while (true) {
+        ++count;
         //Grow
         //console.log("Grow");
         let connector = BKGrow(nodes, active, flags, parents, edgeToParent, activeEdge);
@@ -416,7 +421,13 @@ BKMaxflow = function (src: number, sink: number, network: BKNetwork): FlowBase.I
         //Adoption phase
         //console.log("adoption");
         BKAdopt(nodes, orphans, flags, parents, edgeToParent, active, src, sink);
+
+        if (count % 10000 == 0) {
+            progress.STEP.GrabcutGraphMaxFlow.advanceTo(progressScale);
+        }
     }
+    console.log('max flow loop = ' + count);
+    progress.STEP.GrabcutGraphMaxFlow.advanceTo(1);
 
     let sourceOutflux = () => Util.Sum(nodes[src].edgesOut.map(e => e.flow));
     let STreeIndices = () =>

@@ -1,14 +1,14 @@
 {
     "compilerOptions": {
+      "target":"es5",
       "module": "amd",
+      "outFile": "build/grabcut.js",
       "noImplicitAny": true,
       "removeComments": true,
       "preserveConstEnums": true,
-      "outFile": "docs/out.js",
       "sourceMap": true,
-      "target":"es5",
       "alwaysStrict":true,
       "lib": ["dom", "es5", "ES2015"]
     },
-    "include": ["*.ts", "WebPage/*.ts", "Collections/*.ts"],
+    "include": ["src/**/*.ts"],
 }
