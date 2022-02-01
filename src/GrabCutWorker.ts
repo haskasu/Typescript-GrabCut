@@ -112,10 +112,10 @@ export function init(workerScope: any): void {
                 cut.SetTrimap(trimap, size.width, size.height);
                 cut.BeginCrop(message.options);
                 console.time('GetAlphaMask');
-                let alphaMask = FeatherMask(message.options.featherSize, cut.GetAlphaMask());
+                let result = FeatherMask(message.options.featherSize, cut.GetAlphaMask());
                 console.timeEnd('GetAlphaMask');
                 progress.STEP.GetAlphaMask.advance();
-                workerScope.postMessage({ type: 'alphaMask', alphaMask: alphaMask })
+                workerScope.postMessage({ type: 'alphaMask', alphaMask: result.alphaMask, rect: result.rect })
             } catch (err) {
                 console.error('grabcut error: ', err);
             }

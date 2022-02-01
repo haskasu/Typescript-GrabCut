@@ -131,8 +131,15 @@ export function ApplyAlphaMask(img: ImageData, alpha: number[][]): string {
     return c.SetImageData(bufferData);
 }
 
-export function FeatherMask(kernelSize: number, alpha: number[][]): number[][] {
+export function FeatherMask(kernelSize: number, alpha: number[][]): {
+    alphaMask: number[][],
+    rect: { x: number, y: number, w: number, h: number },
+} {
     let [width, height] = [alpha[0].length, alpha.length];
+    let minX = width;
+    let maxX = 0;
+    let minY = height;
+    let maxY = 0;
     let feathered: number[][] = Mat.CreateMatrix(height, width);
     let threshold = 0.1;
     let kernalArea = kernelSize * kernelSize;
@@ -146,10 +153,17 @@ export function FeatherMask(kernelSize: number, alpha: number[][]): number[][] {
                 feathered[r][c] = alpha[r][c];
             } else {
                 feathered[r][c] = ConvolutionOnPoint(r, c, alpha, height, width, meanKernel, kernelSize, kernelSize, kernelMid, kernelMid);
+                minX = Math.min(minX, c);
+                maxX = Math.max(maxX, c);
+                minY = Math.min(minY, r);
+                maxY = Math.max(maxY, r);
             }
         }
     }
-    return feathered;
+    return {
+        alphaMask: feathered,
+        rect: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }
+    };
 }
 
 export function Apply2DConvolution(src: Mat.Matrix, kernel: Mat.Matrix): Mat.Matrix {

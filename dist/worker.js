@@ -2883,6 +2883,10 @@ define("ImageUtil", ["require", "exports", "Matrix", "Utility"], function (requi
     exports.ApplyAlphaMask = ApplyAlphaMask;
     function FeatherMask(kernelSize, alpha) {
         var _a = [alpha[0].length, alpha.length], width = _a[0], height = _a[1];
+        var minX = width;
+        var maxX = 0;
+        var minY = height;
+        var maxY = 0;
         var feathered = Mat.CreateMatrix(height, width);
         var threshold = 0.1;
         var kernalArea = kernelSize * kernelSize;
@@ -2895,10 +2899,17 @@ define("ImageUtil", ["require", "exports", "Matrix", "Utility"], function (requi
                 }
                 else {
                     feathered[r][c] = ConvolutionOnPoint(r, c, alpha, height, width, meanKernel, kernelSize, kernelSize, kernelMid, kernelMid);
+                    minX = Math.min(minX, c);
+                    maxX = Math.max(maxX, c);
+                    minY = Math.min(minY, r);
+                    maxY = Math.max(maxY, r);
                 }
             }
         }
-        return feathered;
+        return {
+            alphaMask: feathered,
+            rect: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }
+        };
     }
     exports.FeatherMask = FeatherMask;
     function Apply2DConvolution(src, kernel) {
@@ -3147,10 +3158,10 @@ define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geo
                     cut.SetTrimap(trimap, size.width, size.height);
                     cut.BeginCrop(message.options);
                     console.time('GetAlphaMask');
-                    var alphaMask = ImageUtil_1.FeatherMask(message.options.featherSize, cut.GetAlphaMask());
+                    var result = ImageUtil_1.FeatherMask(message.options.featherSize, cut.GetAlphaMask());
                     console.timeEnd('GetAlphaMask');
                     Progress_4.progress.STEP.GetAlphaMask.advance();
-                    workerScope.postMessage({ type: 'alphaMask', alphaMask: alphaMask });
+                    workerScope.postMessage({ type: 'alphaMask', alphaMask: result.alphaMask, rect: result.rect });
                 }
                 catch (err) {
                     console.error('grabcut error: ', err);
