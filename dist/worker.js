@@ -1736,6 +1736,7 @@ define("Progress", ["require", "exports"], function (require, exports) {
             this.workerScope = workerScope;
             this.total = 0;
             this.current = 0;
+            this.stopped = false;
             var steps = this.STEP;
             this.total += steps.PREPARE_TRIMAP.reset();
             this.total += steps.PREPARE_IMGDATA.reset();
@@ -1755,8 +1756,15 @@ define("Progress", ["require", "exports"], function (require, exports) {
             this.total += steps.GetAlphaMask.reset();
         };
         Progress.prototype.onAdvanced = function (value) {
+            if (this.stopped) {
+                throw new Error('cancelled');
+            }
             this.current += value;
             this.workerScope.postMessage({ type: 'progress', progress: this.current, total: this.total });
+        };
+        Progress.prototype.stop = function () {
+            this.stopped = true;
+            this.workerScope && this.workerScope.postMessage({ type: 'cancelled' });
         };
         return Progress;
     }());
@@ -3126,22 +3134,30 @@ define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geo
     function init(workerScope) {
         workerScope.onmessage = function (event) {
             var message = event.data;
+            console.log('receive grabcut command: ', message);
             if (message.type == 'grabcut') {
-                console.log('receive grabcut command: ', message);
-                Progress_4.progress.reset(workerScope, message.options);
-                var size = { width: message.width, height: message.height };
-                var rect = new Rect(message.rect.x, message.rect.y, message.rect.w, message.rect.h);
-                console.time('createTrimap');
-                var trimap = createTrimap(size.width, size.height, rect, message.lines);
-                console.timeEnd('createTrimap');
-                var cut = new GrabCut_1.GrabCut(ImageUtil_1.ImgData2_1DMat(message.imageData), size.width, size.height);
-                cut.SetTrimap(trimap, size.width, size.height);
-                cut.BeginCrop(message.options);
-                console.time('GetAlphaMask');
-                var alphaMask = ImageUtil_1.FeatherMask(message.options.featherSize, cut.GetAlphaMask());
-                console.timeEnd('GetAlphaMask');
-                Progress_4.progress.STEP.GetAlphaMask.advance();
-                workerScope.postMessage({ type: 'alphaMask', alphaMask: alphaMask });
+                try {
+                    Progress_4.progress.reset(workerScope, message.options);
+                    var size = { width: message.width, height: message.height };
+                    var rect = new Rect(message.rect.x, message.rect.y, message.rect.w, message.rect.h);
+                    console.time('createTrimap');
+                    var trimap = createTrimap(size.width, size.height, rect, message.lines);
+                    console.timeEnd('createTrimap');
+                    var cut = new GrabCut_1.GrabCut(ImageUtil_1.ImgData2_1DMat(message.imageData), size.width, size.height);
+                    cut.SetTrimap(trimap, size.width, size.height);
+                    cut.BeginCrop(message.options);
+                    console.time('GetAlphaMask');
+                    var alphaMask = ImageUtil_1.FeatherMask(message.options.featherSize, cut.GetAlphaMask());
+                    console.timeEnd('GetAlphaMask');
+                    Progress_4.progress.STEP.GetAlphaMask.advance();
+                    workerScope.postMessage({ type: 'alphaMask', alphaMask: alphaMask });
+                }
+                catch (err) {
+                    console.error('grabcut error: ', err);
+                }
+            }
+            else if (message.type == 'cancel') {
+                Progress_4.progress.stop();
             }
         };
         workerScope.postMessage({ type: 'loaded' });

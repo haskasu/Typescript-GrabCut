@@ -81,6 +81,8 @@ class Progress {
 
     current: number;
 
+    stopped: boolean;
+
     constructor() {
 
     }
@@ -89,6 +91,7 @@ class Progress {
         this.workerScope = workerScope;
         this.total = 0;
         this.current = 0;
+        this.stopped = false;
 
         const steps = this.STEP;
         this.total += steps.PREPARE_TRIMAP.reset();
@@ -115,8 +118,16 @@ class Progress {
     }
 
     onAdvanced(value: number): void {
+        if (this.stopped) {
+            throw new Error('cancelled');
+        }
         this.current += value;
         this.workerScope.postMessage({ type: 'progress', progress: this.current, total: this.total });
+    }
+
+    stop(): void {
+        this.stopped = true;
+        this.workerScope && this.workerScope.postMessage({ type: 'cancelled' });
     }
 }
 

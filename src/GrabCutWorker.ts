@@ -67,7 +67,7 @@ function prepareGrabcutLines(cutlines: IGrabcutLine[]): void {
             }
             prevP = point;
 
-            if(!hitRect) {
+            if (!hitRect) {
                 hitRect = new Rectangle(p.x - halfWidth, p.y - halfWidth, halfWidth * 2, halfWidth * 2);
             } else {
                 hitRect.x = Math.min(hitRect.x, p.x - halfWidth);
@@ -99,22 +99,28 @@ function hitTestLines(lines: Line[], halfWidth: number, point: Point): boolean {
 export function init(workerScope: any): void {
     workerScope.onmessage = function (event: any) {
         let message = event.data;
+        console.log('receive grabcut command: ', message);
         if (message.type == 'grabcut') {
-            console.log('receive grabcut command: ', message);
-            progress.reset(workerScope, message.options);
-            let size = { width: message.width, height: message.height };
-            let rect = new Rect(message.rect.x, message.rect.y, message.rect.w, message.rect.h);
-            console.time('createTrimap');
-            let trimap = createTrimap(size.width, size.height, rect, message.lines);
-            console.timeEnd('createTrimap');
-            let cut = new GrabCut(ImgData2_1DMat(message.imageData), size.width, size.height);
-            cut.SetTrimap(trimap, size.width, size.height);
-            cut.BeginCrop(message.options);
-            console.time('GetAlphaMask');
-            let alphaMask = FeatherMask(message.options.featherSize, cut.GetAlphaMask());
-            console.timeEnd('GetAlphaMask');
-            progress.STEP.GetAlphaMask.advance();
-            workerScope.postMessage({ type: 'alphaMask', alphaMask: alphaMask })
+            try {
+                progress.reset(workerScope, message.options);
+                let size = { width: message.width, height: message.height };
+                let rect = new Rect(message.rect.x, message.rect.y, message.rect.w, message.rect.h);
+                console.time('createTrimap');
+                let trimap = createTrimap(size.width, size.height, rect, message.lines);
+                console.timeEnd('createTrimap');
+                let cut = new GrabCut(ImgData2_1DMat(message.imageData), size.width, size.height);
+                cut.SetTrimap(trimap, size.width, size.height);
+                cut.BeginCrop(message.options);
+                console.time('GetAlphaMask');
+                let alphaMask = FeatherMask(message.options.featherSize, cut.GetAlphaMask());
+                console.timeEnd('GetAlphaMask');
+                progress.STEP.GetAlphaMask.advance();
+                workerScope.postMessage({ type: 'alphaMask', alphaMask: alphaMask })
+            } catch (err) {
+                console.error('grabcut error: ', err);
+            }
+        } else if (message.type == 'cancel') {
+            progress.stop();
         }
     }
     workerScope.postMessage({ type: 'loaded' });
