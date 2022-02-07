@@ -73,6 +73,7 @@ class Progress {
         GrabcutGraphCut: new ProgressStep(350),
 
         GetAlphaMask: new ProgressStep(90),
+        Feather: new ProgressStep(90),
     }
 
     workerScope: any;

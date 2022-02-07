@@ -1730,6 +1730,7 @@ define("Progress", ["require", "exports"], function (require, exports) {
                 GrabcutGraphMaxFlow: new ProgressStep(8000),
                 GrabcutGraphCut: new ProgressStep(350),
                 GetAlphaMask: new ProgressStep(90),
+                Feather: new ProgressStep(90),
             };
         }
         Progress.prototype.reset = function (workerScope, options) {
@@ -2523,6 +2524,73 @@ define("geoms/Point", ["require", "exports"], function (require, exports) {
     }());
     exports.Point = Point;
 });
+define("Feather", ["require", "exports", "geoms/Point", "Matrix"], function (require, exports, Point_1, Mat) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.Feather = void 0;
+    var Feather = (function () {
+        function Feather(size) {
+            this.size = size;
+        }
+        Feather.prototype.featherMask = function (alpha) {
+            if (this.size < 1) {
+                return alpha;
+            }
+            var _a = [alpha[0].length, alpha.length], width = _a[0], height = _a[1];
+            var threshold = 0.1;
+            var maxDist = this.size;
+            var feathered = Mat.CreateMatrix(height, width);
+            var borderList = {};
+            for (var r = 0; r < height; r++) {
+                for (var c = 0; c < width; c++) {
+                    feathered[r][c] = alpha[r][c];
+                    if (alpha[r][c] < threshold) {
+                        feathered[r][c] = 0;
+                        var minI = Math.max(0, c - maxDist);
+                        var maxI = Math.min(width - 1, c + maxDist);
+                        var minJ = Math.max(0, r - maxDist);
+                        var maxJ = Math.min(height - 1, r + maxDist);
+                        for (var i = minI; i <= maxI; ++i) {
+                            for (var j = minJ; j <= maxJ; ++j) {
+                                if (alpha[j][i] > 0) {
+                                    var key = Point_1.Point.makeString(i, j);
+                                    var di = i - c;
+                                    var dj = j - r;
+                                    var dist = Math.sqrt(di * di + dj * dj);
+                                    if (dist < maxDist + 1) {
+                                        var border = borderList[key] || new FeatherBorder(i, j, dist);
+                                        border.updateDistance(dist);
+                                        borderList[key] = border;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for (var key in borderList) {
+                var border = borderList[key];
+                var percent = (Math.sin(border.distance / (maxDist + 1) * Math.PI - Math.PI / 2) + 1) / 2;
+                feathered[border.y][border.x] *= percent;
+            }
+            return feathered;
+        };
+        return Feather;
+    }());
+    exports.Feather = Feather;
+    var FeatherBorder = (function (_super) {
+        __extends(FeatherBorder, _super);
+        function FeatherBorder(x, y, distance) {
+            var _this = _super.call(this, x, y) || this;
+            _this.distance = distance;
+            return _this;
+        }
+        FeatherBorder.prototype.updateDistance = function (dist) {
+            this.distance = Math.min(this.distance, dist);
+        };
+        return FeatherBorder;
+    }(Point_1.Point));
+});
 define("geoms/Rectangle", ["require", "exports"], function (require, exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -2614,7 +2682,7 @@ define("geoms/Rectangle", ["require", "exports"], function (require, exports) {
     }());
     exports.Rectangle = Rectangle;
 });
-define("geoms/Line", ["require", "exports", "geoms/Rectangle", "geoms/Point"], function (require, exports, Rectangle_1, Point_1) {
+define("geoms/Line", ["require", "exports", "geoms/Rectangle", "geoms/Point"], function (require, exports, Rectangle_1, Point_2) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Line = void 0;
@@ -2666,7 +2734,7 @@ define("geoms/Line", ["require", "exports", "geoms/Rectangle", "geoms/Point"], f
         };
         Line.prototype.projectionOf = function (point, checkFinite) {
             if (checkFinite === void 0) { checkFinite = false; }
-            var diff = new Point_1.Point(point.x - this._point1.x, point.y - this._point1.y);
+            var diff = new Point_2.Point(point.x - this._point1.x, point.y - this._point1.y);
             var vec = this.vector.clone();
             vec.normalize();
             var t = vec.dot(diff);
@@ -2701,7 +2769,7 @@ define("geoms/Line", ["require", "exports", "geoms/Rectangle", "geoms/Point"], f
             configurable: true
         });
         Line.prototype.getPerpendicularLine = function (refPoint) {
-            return new Line(refPoint, new Point_1.Point(refPoint.x - this.vector.y, refPoint.y + this.vector.x), false);
+            return new Line(refPoint, new Point_2.Point(refPoint.x - this.vector.y, refPoint.y + this.vector.x), false);
         };
         Line.prototype.intersectsRectangle = function (rect) {
             if (rect.containsPoint(this._point1) || rect.containsPoint(this._point2))
@@ -2745,7 +2813,7 @@ define("geoms/Line", ["require", "exports", "geoms/Rectangle", "geoms/Point"], f
                 return false;
             }
             else {
-                var pvec = new Point_1.Point(point.x - this._point1.x, point.y - this._point1.y);
+                var pvec = new Point_2.Point(point.x - this._point1.x, point.y - this._point1.y);
                 return this.vector.getNormal().dot(pvec) > 0;
             }
         };
@@ -2754,7 +2822,7 @@ define("geoms/Line", ["require", "exports", "geoms/Rectangle", "geoms/Point"], f
                 return false;
             }
             else {
-                var pvec = new Point_1.Point(point.x - this._point1.x, point.y - this._point1.y);
+                var pvec = new Point_2.Point(point.x - this._point1.x, point.y - this._point1.y);
                 return this.vector.getNormal().dot(pvec) < 0;
             }
         };
@@ -2898,7 +2966,12 @@ define("ImageUtil", ["require", "exports", "Matrix", "Utility"], function (requi
                     feathered[r][c] = alpha[r][c];
                 }
                 else {
-                    feathered[r][c] = ConvolutionOnPoint(r, c, alpha, height, width, meanKernel, kernelSize, kernelSize, kernelMid, kernelMid);
+                    if (kernelSize > 0) {
+                        feathered[r][c] = ConvolutionOnPoint(r, c, alpha, height, width, meanKernel, kernelSize, kernelSize, kernelMid, kernelMid);
+                    }
+                    else {
+                        feathered[r][c] = alpha[r][c];
+                    }
                     minX = Math.min(minX, c);
                     maxX = Math.max(maxX, c);
                     minY = Math.min(minY, r);
@@ -3068,7 +3141,7 @@ define("ImageUtil", ["require", "exports", "Matrix", "Utility"], function (requi
     }
     exports.ImgData2URL = ImgData2URL;
 });
-define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geoms/Rectangle", "GrabCut", "ImageUtil", "Progress", "Utility"], function (require, exports, Line_1, Point_2, Rectangle_2, GrabCut_1, ImageUtil_1, Progress_4, Utility_1) {
+define("GrabCutWorker", ["require", "exports", "Feather", "geoms/Line", "geoms/Point", "geoms/Rectangle", "GrabCut", "ImageUtil", "Progress", "Utility"], function (require, exports, Feather_1, Line_1, Point_3, Rectangle_2, GrabCut_1, ImageUtil_1, Progress_4, Utility_1) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.init = void 0;
@@ -3111,7 +3184,7 @@ define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geo
             var hitRect;
             for (var _i = 0, _a = cutLine.points; _i < _a.length; _i++) {
                 var p = _a[_i];
-                var point = new Point_2.Point(p.x, p.y);
+                var point = new Point_3.Point(p.x, p.y);
                 if (prevP) {
                     cutLine.lines.push(new Line_1.Line(prevP, point, true));
                 }
@@ -3130,7 +3203,7 @@ define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geo
         });
     }
     function getGrabcutLineType(cutLines, x, y) {
-        var point = new Point_2.Point(x, y);
+        var point = new Point_3.Point(x, y);
         var cutLine = cutLines.find(function (line) { return line.hitRect.contains(x, y) && hitTestLines(line.lines, line.thickness / 2, point); });
         return cutLine ? cutLine.mode : '';
     }
@@ -3139,7 +3212,7 @@ define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geo
             if (line.projectionOf(point, true) && line.distanceTo(point) <= halfWidth) {
                 return true;
             }
-            return Point_2.Point.distance(line.point1, point) <= halfWidth || Point_2.Point.distance(line.point2, point) <= halfWidth;
+            return Point_3.Point.distance(line.point1, point) <= halfWidth || Point_3.Point.distance(line.point2, point) <= halfWidth;
         });
     }
     function init(workerScope) {
@@ -3158,9 +3231,12 @@ define("GrabCutWorker", ["require", "exports", "geoms/Line", "geoms/Point", "geo
                     cut.SetTrimap(trimap, size.width, size.height);
                     cut.BeginCrop(message.options);
                     console.time('GetAlphaMask');
-                    var result = ImageUtil_1.FeatherMask(message.options.featherSize, cut.GetAlphaMask());
-                    console.timeEnd('GetAlphaMask');
+                    var featherSize = message.options.featherSize;
+                    var result = ImageUtil_1.FeatherMask(Math.min(3, featherSize), cut.GetAlphaMask());
                     Progress_4.progress.STEP.GetAlphaMask.advance();
+                    result.alphaMask = new Feather_1.Feather(featherSize).featherMask(result.alphaMask);
+                    console.timeEnd('GetAlphaMask');
+                    Progress_4.progress.STEP.Feather.advance();
                     workerScope.postMessage({ type: 'alphaMask', alphaMask: result.alphaMask, rect: result.rect });
                 }
                 catch (err) {

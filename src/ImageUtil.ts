@@ -152,7 +152,11 @@ export function FeatherMask(kernelSize: number, alpha: number[][]): {
             if (alpha[r][c] < threshold) {
                 feathered[r][c] = alpha[r][c];
             } else {
-                feathered[r][c] = ConvolutionOnPoint(r, c, alpha, height, width, meanKernel, kernelSize, kernelSize, kernelMid, kernelMid);
+                if (kernelSize > 0) {
+                    feathered[r][c] = ConvolutionOnPoint(r, c, alpha, height, width, meanKernel, kernelSize, kernelSize, kernelMid, kernelMid);
+                } else {
+                    feathered[r][c] = alpha[r][c];
+                }
                 minX = Math.min(minX, c);
                 maxX = Math.max(maxX, c);
                 minY = Math.min(minY, r);

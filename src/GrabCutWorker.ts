@@ -1,3 +1,4 @@
+import { Feather } from "./Feather";
 import { Line } from "./geoms/Line";
 import { Point } from "./geoms/Point";
 import { Rectangle } from "./geoms/Rectangle";
@@ -112,9 +113,12 @@ export function init(workerScope: any): void {
                 cut.SetTrimap(trimap, size.width, size.height);
                 cut.BeginCrop(message.options);
                 console.time('GetAlphaMask');
-                let result = FeatherMask(message.options.featherSize, cut.GetAlphaMask());
-                console.timeEnd('GetAlphaMask');
+                let featherSize = message.options.featherSize;
+                let result = FeatherMask(Math.min(3, featherSize), cut.GetAlphaMask());
                 progress.STEP.GetAlphaMask.advance();
+                result.alphaMask = new Feather(featherSize).featherMask(result.alphaMask);
+                console.timeEnd('GetAlphaMask');
+                progress.STEP.Feather.advance();
                 workerScope.postMessage({ type: 'alphaMask', alphaMask: result.alphaMask, rect: result.rect })
             } catch (err) {
                 console.error('grabcut error: ', err);

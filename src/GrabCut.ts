@@ -16,7 +16,7 @@ export enum Trimap {
 export interface Options {
     tolerance: number, //in %, min changes to next iteration
     maxIterations: number,
-    cohesionFactor: number, // gamma
+    cohesionFactor: number,
     nFGClusters: number,
     nBGClusters: number
 }
@@ -363,7 +363,7 @@ export class GrabCut {
 
         for (let r = 0; r < height; r++) {
             for (let c = 0; c < width; c++) {
-                //Pixel to src
+                //Pixel to sink
                 let pixelNodeInd = GetArrayIndex(r, c, width);
                 network.CreateEdge(pixelNodeInd, sinkInd, 0);
             }
