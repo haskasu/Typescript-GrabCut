@@ -3002,13 +3002,14 @@ define("ImageUtil", ["require", "exports", "Matrix", "Utility"], function (requi
         var acc = 0;
         for (var r = 0; r < kRows; r++) {
             var destR = targetRow + r - kMidRowIndex;
-            if (destR < 0 || destR >= nRows)
-                continue;
             for (var c = 0; c < kCols; c++) {
                 var destC = targetCol + c - kMidColIndex;
-                if (destC < 0 || destC >= nCols)
-                    continue;
-                acc += kernel[r][c] * src[destR][destC];
+                if (destR < 0 || destR >= nRows || destC < 0 || destC >= nCols) {
+                    acc += kernel[r][c] * src[targetRow][targetCol];
+                }
+                else {
+                    acc += kernel[r][c] * src[destR][destC];
+                }
             }
         }
         return acc;

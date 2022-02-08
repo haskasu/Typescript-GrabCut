@@ -195,11 +195,14 @@ function ConvolutionOnPoint(
     let acc = 0;
     for (let r = 0; r < kRows; r++) {
         let destR = targetRow + r - kMidRowIndex;
-        if (destR < 0 || destR >= nRows) continue; //Out of bounds
         for (let c = 0; c < kCols; c++) {
             let destC = targetCol + c - kMidColIndex;
-            if (destC < 0 || destC >= nCols) continue; //Out of bounds
-            acc += kernel[r][c] * src[destR][destC];
+            if (destR < 0 || destR >= nRows || destC < 0 || destC >= nCols) {
+                //Out of bounds
+                acc += kernel[r][c] * src[targetRow][targetCol];
+            } else {
+                acc += kernel[r][c] * src[destR][destC];
+            }
         }
     }
     return acc;
